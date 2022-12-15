@@ -1,0 +1,262 @@
+<html>
+  <head>
+    <script type="text/javascript">
+
+      // ASCII key codes stored as constants for readability.
+      var KEY_PRESS_LEFT = 37;
+      var KEY_PRESS_RIGHT = 39;
+      var KEY_PRESS_UP = 38;
+      var KEY_PRESS_DOWN = 40;
+      var KEY_PRESS_SPACE = 32;
+      var KEY_PRESS_X = 88;
+      var KEY_PRESS_Z = 90;
+
+      // Stores each key press individually so that multiple presses may be decoded
+      var keyPresses = {
+        KEY_PRESS_LEFT: false,
+        KEY_PRESS_RIGHT: false,
+        KEY_PRESS_UP: false,
+        KEY_PRESS_DOWN: false,
+        KEY_PRESS_SPACE: false,
+        KEY_PRESS_X: false,
+        KEY_PRESS_Z: false
+      };
+      
+      
+      class Box{
+        constructor(x, y, width, height) {
+          this.x = x;
+          this.y = y;
+          this.width = width;
+          this.height = height;
+        }      
+        
+        tick() {
+        }
+
+        contains(otherX, otherY) {
+          return ((otherX >= this.x) && (otherX <= (this.x + this.width)) && (otherY >= this.y) && (otherY <= (this.y + this.height)));
+        }
+
+        calculateEjection(otherX, otherY) {
+          var halfWidth = this.width / 2;
+          var halfHeight = this.height / 2;
+          var centerX = this.x + halfWidth;
+          var centerY = this.y + halfHeight;
+          var xDiff = centerX - otherX;
+          var yDiff = centerY - otherY;
+          var xRel = Math.abs(xDiff) / halfWidth;
+          var yRel = Math.abs(yDiff) / halfHeight;
+          if (xRel > yRel) {
+            if (xDiff < 0) {
+              return [ (this.x + this.width) - otherX, 0 ];
+            } else {
+              return [ this.x - otherX, 0 ];
+            }
+          } else {
+            if (yDiff < 0) {
+              return [ 0, (this.y + this.height) - otherY];
+            } else {
+              return [ 0, this.y - otherY ];
+            }
+          }
+        }
+
+        draw() {
+         canvas.fillStyle = "red";
+         canvas.fillRect(this.x - cameraX, this.y - cameraY, this.width, this.height);
+         canvas.strokeStyle  = "pink";
+          canvas.beginPath();
+         canvas.rect(this.x - cameraX, this.y - cameraY, this.width, this.height);
+          canvas.stroke();
+        }
+      }
+      
+      class ScrollingBox extends Box{
+        constructor(x, y, width, height, xVel) {
+          super(x, y, width, height);
+          this.xVel = xVel;
+          this.startXVel = xVel;
+        }
+        
+        tick() {
+          this.x += this.xVel;
+          if (this.x > 180) {
+            this.xVel = -this.startXVel;
+          } else if (this.x < 0) {
+            this.xVel = this.startXVel;
+          }
+        }
+      }
+
+      var player = {
+        x: 100,
+        y: 280,
+        yVel: 0,
+        draw: function() {
+          canvas.fillStyle = "green";
+          canvas.beginPath();
+          canvas.arc(this.x - cameraX, this.y - 3 - cameraY, 5, 0, 2 * Math.PI);
+          canvas.fill();
+
+          canvas.fillStyle = "white";
+          canvas.beginPath();
+          canvas.arc(this.x - cameraX, this.y - cameraY, 1, 0, 2 * Math.PI);
+          canvas.arc(this.x + 4 - cameraX, this.y - cameraY, 1, 0, 2 * Math.PI);
+          canvas.arc(this.x - 4 - cameraX, this.y - cameraY, 1, 0, 2 * Math.PI);
+          canvas.fill();
+
+          canvas.beginPath();
+          canvas.arc(this.x - cameraX, this.y - 5 - cameraY, 1, 0, 2 * Math.PI);
+          canvas.arc(this.x + 4 - cameraX, this.y - 5 - cameraY, 1, 0, 2 * Math.PI);
+          canvas.arc(this.x - 4 - cameraX, this.y - 5 - cameraY, 1, 0, 2 * Math.PI);
+          canvas.fill();
+        }
+      }
+
+      /**
+       * Sets up our game. Stores references to the piece/board images and canvas, sets up key listening, and starts our game loop.
+       */
+      function onLoad() {
+        window.setInterval(gameLoop, 16);
+
+        // Get all of our game parts: the canvas, the board image, and the piece image.
+        var canvasElement = document.getElementById("canvas");
+        // We draw via the canvas's 2d context, so we store a reference for drawing.
+        canvas = canvasElement.getContext("2d");
+
+        // Every time a key is pressed, store it to be processed in the game loop.
+        document.addEventListener('keydown', function (event) {
+          keyPresses[event.keyCode] = true;
+        });
+
+        document.addEventListener('keyup', function (event) {
+          keyPresses[event.keyCode] = false;
+        });
+                
+        cameraX = -100;
+        cameraY = 0;
+        
+        boxes = [new Box(60, 180, 80, 80), new Box(-100, 290, 400, 400), new ScrollingBox(0, 140, 16, 16, 1),
+          new Box(-20, 250, 16, 16),new Box(196, 250, 16, 16),new Box(180, 250, 16, 16), new ScrollingBox(30, 80, 16, 16, 1.25),
+          new ScrollingBox(50, 20, 16, 16, 1.4), new ScrollingBox(70, -40, 16, 16, 2)];
+          
+        for (var x = 0; x < 160; x += 8) {
+          boxes.push(new Box(x + 200, -80, 8, 8));
+        }
+      }
+
+      function constrainPlayerByBox(box, xOff, yOff) {
+        if (box.contains(player.x + xOff, player.y + yOff)) {
+          var ejectionResults = box.calculateEjection(player.x + xOff, player.y + yOff);
+          player.x += ejectionResults[0];
+          player.y += ejectionResults[1];
+          if (ejectionResults[1] != 0 && (Math.sign(ejectionResults[1]) != Math.sign(player.yVel))) {
+              player.yVel = 0;
+          }
+        }
+      }
+
+
+      /**
+       * The heart of the game, the game loop calls methods to poll inputs, handle game state and draw the game.
+       */
+      function gameLoop() {
+
+          handleInput();
+            
+          player.yVel += 0.1;
+          if (player.yVel > 4) {
+            player.yVel = 4
+          }
+          
+          player.y += player.yVel;
+
+          boxes.forEach(function(box) {
+            constrainPlayerByBox(box, 0, 0);
+            constrainPlayerByBox(box, 4, 0);
+            constrainPlayerByBox(box, -4, 0);
+
+            constrainPlayerByBox(box, 0, -5);
+            constrainPlayerByBox(box, 4, -5);
+            constrainPlayerByBox(box, -4, -5);
+          });
+
+          if (player.platform && player.platform.xVel) {
+            player.x += player.platform.xVel;
+          }
+
+          boxes.forEach(function(box) {
+            box.tick();
+          });
+          
+          player.platform = null;
+          boxes.forEach(function(box) {
+            if (box.contains(player.x, player.y + 1)) {
+              player.platform = box;
+            }
+          });
+
+          drawGame();
+      }
+
+      /**
+       * Figure out what key was pressed, and move the piece. This method uses deltas for the player movements/rotations so that the delta can
+       * be used in a "what if" scenario for determining if a player move is valid.
+       */
+      function handleInput() {
+        // If the player presses left, store a left movement in xDelta.
+        if (keyPresses[KEY_PRESS_LEFT]) {
+          player.x -= 2;
+        }
+
+        // If the player presses right, store a right movement in xDelta.
+        if (keyPresses[KEY_PRESS_RIGHT]) {
+          player.x += 2;
+        }
+
+        // If the player presses down, store a down movement in YDelta.
+        if (player.yVel == 0 && keyPresses[KEY_PRESS_SPACE]) {
+          player.yVel = -4;
+          keyPresses[KEY_PRESS_SPACE] = false;
+        }
+      }
+
+      /**
+       * Draw the game by filling the background and board area with solid colors, then drawing the board, player piece, scores
+       * and piece totals. Also handles drawing the "game over" text.
+       */
+      function drawGame() {
+        // Set the background color of the canvas and fill the canvas.
+        canvas.fillStyle = "black";
+        canvas.fillRect(0, 0, 400, 300);
+        
+        var cameraNewX = player.x - 200;
+        var cameraNewY = player.y - 90;
+        
+        if (Math.abs(cameraX - cameraNewX) > 20) {
+          cameraX += (cameraNewX - cameraX) / 20;
+        }
+
+    
+        if (Math.abs(cameraY - cameraNewY) > 10) {
+          cameraY += (cameraNewY - cameraY) / 10;
+        }
+
+        if (cameraY > 0) {
+          cameraY = 0;
+        }
+        
+        boxes.forEach(function(box) {
+          box.draw();
+        });
+
+        player.draw();
+      }
+
+    </script>
+  </head>
+	<body onload="onLoad();">
+		<canvas id = "canvas" width = "400px" height = "300px" style="zoom: 200%;"></canvas>
+	</body>
+</html>

@@ -23,6 +23,54 @@
       };
       
       
+      class CollisionMap {
+        constructor(x, y, map, cellWidth, cellHeight) {
+          this.originX = x;
+          this.originY = y;
+          this.map = map;
+          this.mapLastXIndex = map[0].length;
+          this.mapLastYIndex = map.length;
+          this.cellWidth = cellWidth;
+          this.cellHeight = cellHeight;
+          this.box = new Box(x, y, cellWidth, cellHeight);
+        }
+        
+        collides(x, y) {
+          var cellX = Math.floor((x - this.originX) / this.cellWidth);
+          var cellY = Math.floor((y - this.originY) / this.cellHeight);
+          if (cellX >= 0 && cellX < this.mapLastXIndex && cellY >= 0 && cellY < this.mapLastYIndex) {
+            return this.map[cellY][cellX] != 0;
+          }
+          return false;
+        }
+        
+        prepareBoxForEjection(x, y) {
+          var cellX = Math.floor((x - this.originX) / this.cellWidth);
+          var cellY = Math.floor((y - this.originY) / this.cellHeight);
+          
+          this.box.x = cellX * this.cellWidth + this.originX;
+          this.box.y = cellY * this.cellWidth + this.originY;
+        }
+        
+        draw() {
+         for (var x = 0; x < this.mapLastXIndex; x ++) {
+           for (var y = 0; y < this.mapLastYIndex; y ++) {
+             if (this.map[y][x] != 0) {
+               canvas.fillStyle = "blue";
+               canvas.fillRect(this.originX + (x * this.cellWidth) - cameraX, this.originY + (y * this.cellHeight) - cameraY, this.cellWidth, this.cellHeight);
+               
+               canvas.strokeStyle  = "aquamarine";
+               canvas.beginPath();
+               canvas.rect(this.originX + (x * this.cellWidth) - cameraX, this.originY + (y * this.cellHeight) - cameraY, this.cellWidth, this.cellHeight);
+               canvas.rect(this.x - cameraX, this.y - cameraY, this.width, this.height);
+               canvas.stroke();
+             }
+           }
+         }
+        }
+      }
+
+      
       class Box{
         constructor(x, y, width, height) {
           this.x = x;
@@ -71,6 +119,7 @@
           canvas.stroke();
         }
       }
+      
       
       class ScrollingBox extends Box{
         constructor(x, y, width, height, xVel) {
@@ -141,9 +190,17 @@
           new Box(-20, 250, 16, 16),new Box(196, 250, 16, 16),new Box(180, 250, 16, 16), new ScrollingBox(30, 80, 16, 16, 1.25),
           new ScrollingBox(50, 20, 16, 16, 1.4), new ScrollingBox(70, -40, 16, 16, 2)];
           
-        for (var x = 0; x < 160; x += 8) {
-          boxes.push(new Box(x + 200, -80, 8, 8));
-        }
+        
+              var map = [
+               [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0],
+               [0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+               [0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+               [0,0,0,0,1,0,0,0,1,0,0,1,0,0,0,1,0,0,0,0,0],
+               [0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+               [0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+               [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0]
+              ];
+        collisionMapObj = new CollisionMap(200, -100, map, 16, 16); 
       }
 
       function constrainPlayerByBox(box, xOff, yOff) {
@@ -155,6 +212,13 @@
               player.yVel = 0;
           }
         }
+      }
+      
+      function constrainPlayerByCollisionMap(xOff,yOff) {
+          if (collisionMapObj.collides(player.x + xOff, player.y + yOff)) {
+            collisionMapObj.prepareBoxForEjection(player.x + xOff, player.y + yOff);
+            constrainPlayerByBox(collisionMapObj.box, xOff, yOff);
+          }
       }
 
 
@@ -181,6 +245,14 @@
             constrainPlayerByBox(box, 4, -5);
             constrainPlayerByBox(box, -4, -5);
           });
+          
+          constrainPlayerByCollisionMap(0, 0);
+          constrainPlayerByCollisionMap(4, 0);
+          constrainPlayerByCollisionMap(-4, 0);
+
+          constrainPlayerByCollisionMap(0, -5);
+          constrainPlayerByCollisionMap(4, -5);
+          constrainPlayerByCollisionMap(-4, -5);
 
           if (player.platform && player.platform.xVel) {
             player.x += player.platform.xVel;
@@ -250,6 +322,8 @@
         boxes.forEach(function(box) {
           box.draw();
         });
+
+        collisionMapObj.draw();
 
         player.draw();
       }

@@ -77,7 +77,8 @@
           this.y = y;
           this.width = width;
           this.height = height;
-        }      
+          this.friction = 0.80;
+        }
         
         tick() {
         }
@@ -142,6 +143,8 @@
         x: 100,
         y: 280,
         yVel: 0,
+        xVel: 0,
+        jumpFrame: -1,
         draw: function() {
           canvas.fillStyle = "green";
           canvas.beginPath();
@@ -191,51 +194,21 @@
           new ScrollingBox(50, 20, 16, 16, 1.4), new ScrollingBox(70, -40, 16, 16, 2)];
           
         
-              var map = [
-               [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0],
-               [0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-               [0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-               [0,0,0,0,1,0,0,0,1,0,0,1,0,0,0,1,0,0,0,0,0],
-               [0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-               [0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-               [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0]
-              ];
-        collisionMapObj = new CollisionMap(200, -100, map, 16, 16); 
+          var map = [
+           [0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0],
+           [0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,1,0,0],
+           [0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,1,0,0],
+           [0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0],
+           [0,0,0,0,0,1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0],
+           [0,0,0,0,1,0,1,0,1,1,0,1,0,0,0,1,0,0,0,0,0],
+           [0,0,0,1,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0],
+           [0,0,1,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0],
+           [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0]
+          ];
+        collisionMapObj = new CollisionMap(300, 156, map, 16, 16); 
       }
 
-      function constrainPlayerByBox(box, xOff, yOff) {
-        if (box.contains(player.x + xOff, player.y + yOff)) {
-          var ejectionResults = box.calculateEjection(player.x + xOff, player.y + yOff);
-          player.x += ejectionResults[0];
-          player.y += ejectionResults[1];
-          if (ejectionResults[1] != 0 && (Math.sign(ejectionResults[1]) != Math.sign(player.yVel))) {
-              player.yVel = 0;
-          }
-        }
-      }
-      
-      function constrainPlayerByCollisionMap(xOff,yOff) {
-          if (collisionMapObj.collides(player.x + xOff, player.y + yOff)) {
-            collisionMapObj.prepareBoxForEjection(player.x + xOff, player.y + yOff);
-            constrainPlayerByBox(collisionMapObj.box, xOff, yOff);
-          }
-      }
-
-
-      /**
-       * The heart of the game, the game loop calls methods to poll inputs, handle game state and draw the game.
-       */
-      function gameLoop() {
-
-          handleInput();
-            
-          player.yVel += 0.1;
-          if (player.yVel > 4) {
-            player.yVel = 4
-          }
-          
-          player.y += player.yVel;
-
+      function constrainPlayer() {
           boxes.forEach(function(box) {
             constrainPlayerByBox(box, 0, 0);
             constrainPlayerByBox(box, 4, 0);
@@ -253,21 +226,77 @@
           constrainPlayerByCollisionMap(0, -5);
           constrainPlayerByCollisionMap(4, -5);
           constrainPlayerByCollisionMap(-4, -5);
+      }
 
-          if (player.platform && player.platform.xVel) {
-            player.x += player.platform.xVel;
+      function constrainPlayerByBox(box, xOff, yOff) {
+        if (box.contains(player.x + xOff, player.y + yOff)) {
+          var ejectionResults = box.calculateEjection(player.x + xOff, player.y + yOff);
+          player.x += ejectionResults[0];
+          player.y += ejectionResults[1];
+          if (ejectionResults[1] != 0 && Math.abs(ejectionResults[1]) > 0.5 && (Math.sign(ejectionResults[1]) != Math.sign(player.yVel))) {
+              player.yVel = 0;
           }
 
-          boxes.forEach(function(box) {
-            box.tick();
-          });
-          
+          if (ejectionResults[0] != 0 && (Math.sign(ejectionResults[0]) != Math.sign(player.xVel))) {
+              player.xVel *= -0.5;
+          }
+        }
+      }
+      
+      function constrainPlayerByCollisionMap(xOff,yOff) {
+          if (collisionMapObj.collides(player.x + xOff, player.y + yOff)) {
+            collisionMapObj.prepareBoxForEjection(player.x + xOff, player.y + yOff);
+            constrainPlayerByBox(collisionMapObj.box, xOff, yOff);
+          }
+      }
+
+      function calculatePlayerPlatform() {
           player.platform = null;
           boxes.forEach(function(box) {
             if (box.contains(player.x, player.y + 1)) {
               player.platform = box;
             }
           });
+          
+          if (collisionMapObj.collides(player.x, player.y + 1)) {
+            player.platform = collisionMapObj.box
+          }
+          if (player.platform && player.platform.xVel) {
+            player.x += player.platform.xVel;
+          }
+
+          if (player.platform && player.platform.yVel) {
+            player.y += player.platform.yVel;
+          }
+          
+          if (player.platform) {
+            player.jumpFrame = -1;
+            player.yVel = 0;
+          }
+      }
+
+      /**
+       * The heart of the game, the game loop calls methods to poll inputs, handle game state and draw the game.
+       */
+      function gameLoop() {
+
+          handleInput();
+            
+         player.yVel += 0.1;
+          if (player.yVel > 4) {
+            player.yVel = 4
+          }
+          
+          player.x += player.xVel;
+          player.y += player.yVel;
+
+          constrainPlayer();
+
+          boxes.forEach(function(box) {
+            box.tick();
+          });
+          
+          calculatePlayerPlatform();
 
           drawGame();
       }
@@ -279,18 +308,45 @@
       function handleInput() {
         // If the player presses left, store a left movement in xDelta.
         if (keyPresses[KEY_PRESS_LEFT]) {
-          player.x -= 2;
+          var amount = player.platform ? 0.6 : 0.3;
+          if (!player.platform || player.xVel < 0) {
+            player.xVel -= amount;
+          } else {
+            player.xVel = -amount;
+          }
+        } else if (keyPresses[KEY_PRESS_RIGHT]) {
+          var amount = player.platform ? 0.6 : 0.3;
+          if (!player.platform || player.xVel > 0) {
+            player.xVel += amount;
+          } else {
+            player.xVel = +amount;
+          }
+        } else if (player.platform) {
+          player.xVel *= player.platform.friction;
+          if (Math.abs(player.xVel) < 0.9) {
+            player.xVel = 0;
+          }
         }
 
-        // If the player presses right, store a right movement in xDelta.
-        if (keyPresses[KEY_PRESS_RIGHT]) {
-          player.x += 2;
+        if (player.xVel < -2) {
+          player.xVel = -2;
+        } else if (player.xVel > 2) {
+          player.xVel = 2;
         }
+
 
         // If the player presses down, store a down movement in YDelta.
-        if (player.yVel == 0 && keyPresses[KEY_PRESS_SPACE]) {
-          player.yVel = -4;
-          keyPresses[KEY_PRESS_SPACE] = false;
+        if (keyPresses[KEY_PRESS_SPACE]) {
+          if (player.jumpFrame == -1 && player.yVel == 0) {
+            player.yVel = -2.5;
+            player.jumpFrame ++;
+          } else if (player.jumpFrame == 5 && player.yVel < 0) {
+            player.yVel -= 1.5;
+          }
+        }
+        
+        if (player.jumpFrame >= 0) {
+          player.jumpFrame ++;
         }
       }
 
